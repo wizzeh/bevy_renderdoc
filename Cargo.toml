@@ -6,5 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = "0.7"
+bevy = { version = "0.7", default-features = false }
 renderdoc = "0.10.1"
+sysinfo = "0.24.6"
+
+[dev-dependencies]
+bevy = "0.7"
