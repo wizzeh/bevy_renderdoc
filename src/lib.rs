@@ -3,17 +3,26 @@
 //! Provides an easy way to register RenderDoc with a Bevy application.
 //! Allows the user to launch the RenderDoc UI on capture, which makes
 //! taking captures more convenient.
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 use bevy::prelude::*;
-pub use renderdoc::*;
+use renderdoc::*;
 use sysinfo::{Pid, ProcessRefreshKind, SystemExt};
 
-/// Trait for creating a Bevy [`App`] with RenderDoc properly initialized.
+pub use renderdoc;
+
+/// The RenderDoc API version this plugin uses.
+pub type RenderDocVersion = V110;
+
+/// Trait for creating a Bevy [`App`] with [`RenderDoc`] properly initialized.
 ///
-/// We need load RenderDoc before any windows or devices have been created.
-/// From what I could tell, there's no way of doing that using a [`Plugin`], so
-/// having the user create the [`App`] using this trait is the next best thing.
-pub trait AddRenderDocPlugin {
+/// [`RenderDoc`] needs to be loaded before any windows or render devices have been created.
+/// This is not possible using a [`Plugin`], since the render device
+/// is loaded outside of Bevy's scheduling, inside of `RenderPlugin::build()`.
+///
+/// Technically, it would be possible to do *if* the user ordered their plugins in a way
+/// that `RenderDocPlugin::build()` gets called before the renderer's. But since that is very
+/// error prone, we instead enforce proper initialization using this trait.
+pub trait WithRenderDoc {
     /// Initializes [`RenderDoc`] and registers the plugin with an [`App`].
     /// The app is created using [`App::new()`].
     ///
@@ -22,10 +31,10 @@ pub trait AddRenderDocPlugin {
     /// use bevy::prelude::*;
     /// use bevy_renderdoc::*;
     ///
-    /// App::with_renderdoc::<V110>().run();
+    /// App::with_renderdoc().run();
     /// ```
-    fn with_renderdoc<V: Version + 'static>() -> App {
-        App::with_renderdoc_custom::<V>(App::new)
+    fn with_renderdoc() -> App {
+        App::with_renderdoc_custom(App::new)
     }
 
     /// Initializes [`RenderDoc`] and registers the plugin with an [`App`] returned from `f`.
@@ -35,62 +44,76 @@ pub trait AddRenderDocPlugin {
     /// use bevy::prelude::*;
     /// use bevy_renderdoc::*;    
     ///
-    /// App::with_renderdoc_custom::<V110>(App::new).run();
+    /// App::with_renderdoc_custom(App::new).run();
     /// ```
-    fn with_renderdoc_custom<V: Version + 'static>(f: fn() -> App) -> App;
+    fn with_renderdoc_custom(f: fn() -> App) -> App;
 }
 
-impl AddRenderDocPlugin for App {
-    fn with_renderdoc_custom<V: Version + 'static>(f: fn() -> App) -> App {
+/// The type of the [`NonSend`] resource used to store [`RenderDoc`] in Bevy.
+///
+/// It is a [`Result`] because we want to log any loading errors after
+/// the Bevy app has been initialized and logging has been setup.
+///
+/// # Examples
+/// ```
+/// # use bevy::prelude::*;
+/// # use bevy_renderdoc::*;
+/// #
+/// fn modify_renderdoc(mut rd: NonSendMut<RenderDocResource>) {
+///     if let Ok(rd) = rd.as_mut() {
+///         rd.set_log_file_path_template("your_path/file_prefix");
+///     }
+/// }
+///
+/// App::with_renderdoc()
+///     .add_startup_system(modify_renderdoc)
+///     .run();
+/// ```
+pub type RenderDocResource = Result<RenderDoc<RenderDocVersion>, Error>;
+
+impl WithRenderDoc for App {
+    fn with_renderdoc_custom(f: fn() -> App) -> App {
         // This needs to happen before App::new()
-        let rd = RenderDoc::<V>::new();
+        let rd = RenderDoc::<RenderDocVersion>::new();
         let mut app = f();
 
-        // TODO: The tracing crate doesn't work here. Figure out why, and use info!/error! macros here.
-        match rd {
-            Ok(rd) => {
-                app.insert_non_send_resource(rd);
-                println!("Initialized RenderDoc successfully!");
-            }
-            Err(e) => {
-                println!("Failed to initialize RenderDoc: {:?}", e);
-            }
-        };
+        app.insert_non_send_resource(rd);
+        app.add_startup_system(setup_renderdoc)
+            .add_system(trigger_capture);
 
-        app.add_plugin(RenderDocPlugin);
         app
     }
 }
 
-struct RenderDocPlugin;
-impl Plugin for RenderDocPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_renderdoc)
-            .add_system(trigger_capture);
-    }
-}
+fn setup_renderdoc(mut rd: NonSendMut<RenderDocResource>) {
+    match rd.as_mut() {
+        Ok(rd) => {
+            rd.set_log_file_path_template("renderdoc/bevy_capture");
+            rd.mask_overlay_bits(OverlayBits::NONE, OverlayBits::NONE);
 
-fn setup_renderdoc(rd: Option<NonSendMut<RenderDoc<V110>>>) {
-    if rd.is_none() {
-        return;
-    }
-
-    let mut rd = rd.unwrap();
-    rd.set_log_file_path_template("renderdoc/bevy_capture");
-    rd.mask_overlay_bits(OverlayBits::NONE, OverlayBits::NONE);
+            info!("Initialized RenderDoc successfully!");
+        }
+        Err(e) => {
+            error!(
+                "Failed to initialize RenderDoc. Ensure RenderDoc is installed and visible from your $PATH: {}",
+                e
+            );
+        }
+    };
 }
 
 fn trigger_capture(
     key: Option<Res<Input<KeyCode>>>,
-    rd: Option<NonSend<RenderDoc<V110>>>,
+    rd: NonSend<RenderDocResource>,
     mut replay_pid: Local<usize>,
     mut system: Local<sysinfo::System>,
 ) {
-    if rd.is_none() || key.is_none() {
+    if rd.is_err() || key.is_none() {
         return;
     }
 
-    let rd = rd.unwrap();
+    // TODO: If a user were to change this hotkey on the RenderDoc instance
+    // this could get mismatched.
     if key.unwrap().just_pressed(KeyCode::F12) {
         // Avoid launching multiple instances of the replay ui
         if system
@@ -99,12 +122,13 @@ fn trigger_capture(
             return;
         }
 
+        let rd = rd.as_ref().unwrap();
         match rd.launch_replay_ui(true, None) {
             Ok(pid) => {
                 *replay_pid = pid as usize;
                 info!("Launching RenderDoc Replay UI");
             }
-            Err(e) => error!("Failed to launch RenderDoc Replay UI: {:?}", e),
+            Err(e) => error!("Failed to launch RenderDoc Replay UI: {}", e),
         }
     }
 }

@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy_renderdoc::*;
 
 fn main() {
-    App::with_renderdoc::<V110>()
+    App::with_renderdoc()
         .insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
