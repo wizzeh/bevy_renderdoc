@@ -1,13 +1,13 @@
 [package]
-name = "bevy-renderdoc"
+name = "bevy_renderdoc"
 version = "0.1.0"
 edition = "2021"
 authors = ["Viktor Pramberg <hi@viktorpramberg.com>"]
 description = "RenderDoc plugin for bevy"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-homepage = "https://github.com/pramberg/bevy-renderdoc"
-repository = "https://github.com/pramberg/bevy-renderdoc"
+homepage = "https://github.com/pramberg/bevy_renderdoc"
+repository = "https://github.com/pramberg/bevy_renderdoc"
 
 [dependencies]
 bevy = { version = "0.7", default-features = false }

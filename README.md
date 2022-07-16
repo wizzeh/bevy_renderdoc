@@ -1,4 +1,4 @@
-# bevy-renderdoc
+# bevy_renderdoc
 
 Bevy plugin for [RenderDoc], wrapping [renderdoc-rs].
 
@@ -27,7 +27,7 @@ Check the [examples](/examples) for more working examples.
 
 ## License
 
-`bevy-renderdoc` is free and open source software distributed under the terms of
+`bevy_renderdoc` is free and open source software distributed under the terms of
 either the [MIT](LICENSE-MIT) or the [Apache 2.0](LICENSE-APACHE) license, at
 your option.
 
