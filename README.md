@@ -14,19 +14,13 @@ either `renderdoc.dll` or `librenderdoc.so` visible from your `$PATH`.
 use bevy::prelude::*;
 use bevy_renderdoc::*;
 
-fn trigger_capture(mut rd: NonSendMut<RenderDocResource>) {
-    if let Ok(rd) = rd.as_mut() {
-        rd.trigger_capture();
-    }
-}
-
 fn main() {
     App::with_renderdoc()
         .add_plugins(DefaultPlugins)
-        .add_startup_system(trigger_capture)
         .run();
 }
 ```
+Check the [examples](/examples) for more working examples.
 
 ## License
 
