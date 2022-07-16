@@ -8,6 +8,9 @@ Bevy plugin for [RenderDoc], wrapping [renderdoc-rs].
 This plugin requires that RenderDoc be installed on the target machine, with
 either `renderdoc.dll` or `librenderdoc.so` visible from your `$PATH`.
 
+## Hotkeys
+`F12`: Trigger capture
+
 ## Example
 
 ```rust
