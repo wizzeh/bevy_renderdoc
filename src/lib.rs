@@ -1,9 +1,23 @@
+#![deny(missing_docs)]
 //! Wrapper around [`RenderDoc`] for [`bevy`].
 //!
 //! Provides an easy way to register RenderDoc with a bevy [`App`].
 //! Allows the user to launch the RenderDoc UI on capture, which makes
 //! taking captures more convenient.
-#![deny(missing_docs)]
+//!
+//! Default hotkey for taking a capture is `F12`.
+//!
+//! # Examples
+//!
+//! ```rust, no_run
+//! use bevy::prelude::*;
+//! use bevy_renderdoc::*;
+//!
+//! App::new()
+//!     .add_plugin(RenderDocPlugin) // order is important
+//!     .add_plugins(DefaultPlugins)
+//!     .run();
+//!
 use bevy::{prelude::*, render::renderer::RenderDevice};
 use renderdoc::*;
 use sysinfo::{Pid, ProcessRefreshKind, SystemExt};
@@ -39,21 +53,11 @@ pub type RenderDocResource = RenderDoc<RenderDocVersion>;
 
 /// A plugin that enables [`RenderDoc`] for this application.
 ///
-/// **This plugin needs to be inserted before the [`RenderPlugin`](bevy::render::RenderPlugin)!**
+/// **This plugin needs to be inserted before the [`RenderPlugin`](bevy::render::RenderPlugin)**!\
 /// Since the [`RenderPlugin`](bevy::render::RenderPlugin) is part of the [`DefaultPlugins`], this
 /// plugin also needs to be added before that. To be safe, just add it first.
 ///
-/// # Examples
-///
-/// ```rust, no_run
-/// use bevy::prelude::*;
-/// use bevy_renderdoc::*;
-///
-/// App::new()
-///     .add_plugin(RenderDocPlugin) // Important
-///     .add_plugins(DefaultPlugins)
-///     .run();
-/// ```
+/// See [crate documentation](crate) for basic usage.
 pub struct RenderDocPlugin;
 impl Plugin for RenderDocPlugin {
     fn build(&self, app: &mut App) {
