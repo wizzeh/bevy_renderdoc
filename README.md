@@ -19,7 +19,7 @@ use bevy_renderdoc::*;
 
 fn main() {
     App::new()
-        .add_plugin(RenderDocPlugin) // Important
+        .add_plugin(RenderDocPlugin) // order is important
         .add_plugins(DefaultPlugins)
         .run();
 }
