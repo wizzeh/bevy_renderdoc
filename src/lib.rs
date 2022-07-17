@@ -1,105 +1,87 @@
-//! Wrapper around [`RenderDoc`] for Bevy.
+//! Wrapper around [`RenderDoc`] for [`bevy`].
 //!
-//! Provides an easy way to register RenderDoc with a Bevy application.
+//! Provides an easy way to register RenderDoc with a bevy [`App`].
 //! Allows the user to launch the RenderDoc UI on capture, which makes
 //! taking captures more convenient.
 #![deny(missing_docs)]
-use bevy::prelude::*;
+use bevy::{prelude::*, render::renderer::RenderDevice};
 use renderdoc::*;
 use sysinfo::{Pid, ProcessRefreshKind, SystemExt};
 
 pub use renderdoc;
 
-/// The RenderDoc API version this plugin uses.
+/// The RenderDoc [`Version`] this plugin uses.
 pub type RenderDocVersion = V110;
 
-/// Trait for creating a Bevy [`App`] with [`RenderDoc`] properly initialized.
+/// The type of the [`NonSend`] resource used to store [`RenderDoc`] in [`bevy`].
 ///
-/// [`RenderDoc`] needs to be loaded before any windows or render devices have been created.
-/// This is not possible using a [`Plugin`], since the render device
-/// is loaded outside of Bevy's scheduling, inside of `RenderPlugin::build()`.
-///
-/// Technically, it would be possible to do *if* the user ordered their plugins in a way
-/// that `RenderDocPlugin::build()` gets called before the renderer's. But since that is very
-/// error prone, we instead enforce proper initialization using this trait.
-pub trait WithRenderDoc {
-    /// Initializes [`RenderDoc`] and registers the plugin with an [`App`].
-    /// The app is created using [`App::new()`].
-    ///
-    /// # Examples
-    /// ```
-    /// use bevy::prelude::*;
-    /// use bevy_renderdoc::*;
-    ///
-    /// App::with_renderdoc().run();
-    /// ```
-    fn with_renderdoc() -> App {
-        App::with_renderdoc_custom(App::new)
-    }
-
-    /// Initializes [`RenderDoc`] and registers the plugin with an [`App`] returned from `f`.
-    ///
-    /// # Examples
-    /// ```
-    /// use bevy::prelude::*;
-    /// use bevy_renderdoc::*;    
-    ///
-    /// App::with_renderdoc_custom(App::new).run();
-    /// ```
-    fn with_renderdoc_custom(f: fn() -> App) -> App;
-}
-
-/// The type of the [`NonSend`] resource used to store [`RenderDoc`] in Bevy.
-///
-/// It is a [`Result`] because we want to log any loading errors after
-/// the Bevy app has been initialized and logging has been setup.
+/// Since the plugin may fail to initialize, the resource must be accessed via
+/// an [`Option`].
 ///
 /// # Examples
-/// ```
+/// ```rust, no_run
 /// # use bevy::prelude::*;
 /// # use bevy_renderdoc::*;
 /// #
-/// fn modify_renderdoc(mut rd: NonSendMut<RenderDocResource>) {
-///     if let Ok(rd) = rd.as_mut() {
+/// fn modify_renderdoc(rd: Option<NonSendMut<RenderDocResource>>) {
+///     if let Some(mut rd) = rd {
 ///         rd.set_log_file_path_template("your_path/file_prefix");
 ///     }
 /// }
 ///
-/// App::with_renderdoc()
+/// App::new()
+///     .add_plugin(RenderDocPlugin)
+///     .add_plugins(DefaultPlugins)
 ///     .add_startup_system(modify_renderdoc)
 ///     .run();
 /// ```
-pub type RenderDocResource = Result<RenderDoc<RenderDocVersion>, Error>;
+pub type RenderDocResource = RenderDoc<RenderDocVersion>;
 
-impl WithRenderDoc for App {
-    fn with_renderdoc_custom(f: fn() -> App) -> App {
-        // This needs to happen before App::new()
-        let rd = RenderDoc::<RenderDocVersion>::new();
-        let mut app = f();
+/// A plugin that enables [`RenderDoc`] for this application.
+///
+/// **This plugin needs to be inserted before the [`RenderPlugin`](bevy::render::RenderPlugin)!**
+/// Since the [`RenderPlugin`](bevy::render::RenderPlugin) is part of the [`DefaultPlugins`], this
+/// plugin also needs to be added before that. To be safe, just add it first.
+///
+/// # Examples
+///
+/// ```rust, no_run
+/// use bevy::prelude::*;
+/// use bevy_renderdoc::*;
+///
+/// App::new()
+///     .add_plugin(RenderDocPlugin) // Important
+///     .add_plugins(DefaultPlugins)
+///     .run();
+/// ```
+pub struct RenderDocPlugin;
+impl Plugin for RenderDocPlugin {
+    fn build(&self, app: &mut App) {
+        let has_invalid_setup = app.world.contains_resource::<RenderDevice>()
+            || app.world.contains_resource::<Windows>();
 
-        app.insert_non_send_resource(rd);
-        app.add_startup_system(setup_renderdoc)
-            .add_system(trigger_capture);
-
-        app
-    }
-}
+        if has_invalid_setup {
+            app.add_startup_system(|| {
+                error!("RenderDocPlugin needs to be added before RenderPlugin!");
+            });
+            return;
+        }
 
 fn setup_renderdoc(mut rd: NonSendMut<RenderDocResource>) {
-    match rd.as_mut() {
-        Ok(rd) => {
-            rd.set_log_file_path_template("renderdoc/bevy_capture");
-            rd.mask_overlay_bits(OverlayBits::NONE, OverlayBits::NONE);
+        match RenderDoc::<RenderDocVersion>::new() {
+            Ok(mut rd) => {
+                rd.set_log_file_path_template("renderdoc/bevy_capture");
+                rd.mask_overlay_bits(OverlayBits::NONE, OverlayBits::NONE);
 
-            info!("Initialized RenderDoc successfully!");
+                app.world.insert_non_send_resource(rd);
+                app.add_startup_system(|| info!("Initialized RenderDoc successfully!"));
+                app.add_system(trigger_capture);
+            }
+            Err(e) => {
+                app.add_startup_system(move || error!("Failed to initialize RenderDoc. Ensure RenderDoc is installed and visible from your $PATH. Error: \"{}\"", e));
+            }
         }
-        Err(e) => {
-            error!(
-                "Failed to initialize RenderDoc. Ensure RenderDoc is installed and visible from your $PATH: {}",
-                e
-            );
-        }
-    };
+    }
 }
 
 fn trigger_capture(
@@ -108,7 +90,7 @@ fn trigger_capture(
     mut replay_pid: Local<usize>,
     mut system: Local<sysinfo::System>,
 ) {
-    if rd.is_err() || key.is_none() {
+    if key.is_none() {
         return;
     }
 
@@ -122,7 +104,6 @@ fn trigger_capture(
             return;
         }
 
-        let rd = rd.as_ref().unwrap();
         match rd.launch_replay_ui(true, None) {
             Ok(pid) => {
                 *replay_pid = pid as usize;

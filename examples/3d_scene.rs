@@ -2,8 +2,9 @@ use bevy::prelude::*;
 use bevy_renderdoc::*;
 
 fn main() {
-    App::with_renderdoc()
+    App::new()
         .insert_resource(Msaa { samples: 4 })
+        .add_plugin(RenderDocPlugin)
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
         .run();
