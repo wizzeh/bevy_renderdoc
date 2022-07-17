@@ -67,7 +67,6 @@ impl Plugin for RenderDocPlugin {
             return;
         }
 
-fn setup_renderdoc(mut rd: NonSendMut<RenderDocResource>) {
         match RenderDoc::<RenderDocVersion>::new() {
             Ok(mut rd) => {
                 rd.set_log_file_path_template("renderdoc/bevy_capture");
