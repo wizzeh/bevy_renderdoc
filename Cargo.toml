@@ -1,6 +1,6 @@
 [package]
 name = "bevy_renderdoc"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Viktor Pramberg <hi@viktorpramberg.com>"]
 description = "RenderDoc plugin for bevy"
