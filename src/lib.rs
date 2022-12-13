@@ -102,7 +102,7 @@ fn trigger_capture(
     if key.unwrap().just_pressed(KeyCode::F12) {
         // Avoid launching multiple instances of the replay ui
         if system
-            .refresh_process_specifics(Pid::from(*replay_pid), ProcessRefreshKind::new().with_cpu())
+            .refresh_process_specifics(Pid::from(*replay_pid as i32), ProcessRefreshKind::new().with_cpu())
         {
             return;
         }
