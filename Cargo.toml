@@ -10,9 +10,9 @@ homepage = "https://github.com/pramberg/bevy_renderdoc"
 repository = "https://github.com/pramberg/bevy_renderdoc"
 
 [dependencies]
-bevy = { version = "0.7", default-features = false, features = ["bevy_render"] }
+bevy = { version = "0.9", default-features = false, features = ["bevy_render"] }
 renderdoc = "0.10.1"
 sysinfo = "0.24.6"
 
 [dev-dependencies]
-bevy = "0.7"
+bevy = "0.9"
